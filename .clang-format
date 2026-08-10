@@ -1,0 +1,4 @@
+# Google C++ Style Guide. https://google.github.io/styleguide/cppguide.html
+BasedOnStyle: Google
+Standard: Latest
+InsertNewlineAtEOF: true

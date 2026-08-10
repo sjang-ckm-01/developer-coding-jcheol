@@ -1,0 +1,2 @@
+# Vendored googletest/benchmark sources pulled in by FetchContent.
+build/*
