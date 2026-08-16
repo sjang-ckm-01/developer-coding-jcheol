@@ -17,6 +17,35 @@ TEST(StorageCacheTest, CreateStartsEmpty) {
 
 TEST(StorageCacheTest, FreeAcceptsNullptr) { freeCache(nullptr); }
 
+TEST(StorageCacheTest, CreateRejectsNonPositiveCapacity) {
+  EXPECT_EQ(createCache(0), nullptr);
+  EXPECT_EQ(createCache(-1), nullptr);
+}
+
+TEST(StorageCacheTest, ApisTolerateNullStore) {
+  StorageCache* store = createCache(-1);
+  ASSERT_EQ(store, nullptr);
+
+  EXPECT_EQ(put(store, 1, 100), -1);
+  EXPECT_EQ(get(store, 1), -1);
+  EXPECT_TRUE(get_orders(store).empty());
+
+  freeCache(store);
+}
+
+TEST(StorageCacheTest, CreateAcceptsSmallestValidCapacity) {
+  StorageCache* store = createCache(1);
+  ASSERT_NE(store, nullptr);
+
+  put(store, 1, 100);
+  put(store, 2, 200);
+
+  EXPECT_EQ(get(store, 1), -1);
+  EXPECT_EQ(get(store, 2), 200);
+
+  freeCache(store);
+}
+
 TEST(StorageCacheTest, FollowsAssignmentScenario) {
   // 1. 용량 4로 저장소 초기화
   StorageCache* store = createCache(4);
@@ -88,13 +117,24 @@ TEST(StorageCacheTest, PutStoresAndOverwritesValues) {
   freeCache(store);
 }
 
-TEST(StorageCacheTest, EvictsLeastRecentlyUsedWhenFull) {
-  StorageCache* store = createCache(4);
+class FilledCacheTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    store = createCache(4);
+    ASSERT_NE(store, nullptr);
 
-  put(store, 1, 1);
-  put(store, 2, 2);
-  put(store, 3, 3);
-  put(store, 4, 4);
+    put(store, 1, 1);
+    put(store, 2, 2);
+    put(store, 3, 3);
+    put(store, 4, 4);
+  }
+
+  void TearDown() override { freeCache(store); }
+
+  StorageCache* store = nullptr;
+};
+
+TEST_F(FilledCacheTest, EvictsLeastRecentlyUsedWhenFull) {
   EXPECT_EQ(get(store, 1), 1);
   EXPECT_EQ(get(store, 2), 2);
   EXPECT_EQ(get(store, 3), 3);
@@ -106,17 +146,9 @@ TEST(StorageCacheTest, EvictsLeastRecentlyUsedWhenFull) {
   EXPECT_EQ(get(store, 3), 3);
   EXPECT_EQ(get(store, 4), 4);
   EXPECT_EQ(get(store, 5), 5);
-
-  freeCache(store);
 }
 
-TEST(StorageCacheTest, OrderReportAgreesWithEviction) {
-  StorageCache* store = createCache(4);
-
-  put(store, 1, 1);
-  put(store, 2, 2);
-  put(store, 3, 3);
-  put(store, 4, 4);
+TEST_F(FilledCacheTest, OrderReportAgreesWithEviction) {
   get(store, 2);
 
   std::vector<int> order = get_orders(store);
@@ -126,23 +158,17 @@ TEST(StorageCacheTest, OrderReportAgreesWithEviction) {
   put(store, 99, 99);
 
   EXPECT_EQ(get(store, claimed_oldest), -1);
-  for (size_t i = 0; i + 1 < order.size(); ++i) {
+  for (std::size_t i = 0; i + 1 < order.size(); ++i) {
     EXPECT_EQ(get(store, order[i]), order[i]);
   }
-
-  freeCache(store);
 }
 
-class StorageCacheUpdateTest : public ::testing::TestWithParam<int> {};
+class StorageCacheUpdateTest : public FilledCacheTest,
+                               public ::testing::WithParamInterface<int> {};
 
 TEST_P(StorageCacheUpdateTest, UpdatingExistingKeyDoesNotEvict) {
   const int key = GetParam();
-  StorageCache* store = createCache(4);
 
-  put(store, 1, 1);
-  put(store, 2, 2);
-  put(store, 3, 3);
-  put(store, 4, 4);
   EXPECT_EQ(get(store, 1), 1);
   EXPECT_EQ(get(store, 2), 2);
   EXPECT_EQ(get(store, 3), 3);
@@ -153,8 +179,21 @@ TEST_P(StorageCacheUpdateTest, UpdatingExistingKeyDoesNotEvict) {
   for (int k = 1; k <= 4; ++k) {
     EXPECT_EQ(get(store, k), k == key ? 101 : k);
   }
+}
 
-  freeCache(store);
+TEST_P(StorageCacheUpdateTest, UpdatingExistingKeyMovesItToMostRecent) {
+  const int key = GetParam();
+
+  put(store, key, 101);
+
+  std::vector<int> expected{key};
+  for (int k = 4; k >= 1; --k) {
+    if (k != key) expected.push_back(k);
+  }
+  EXPECT_EQ(get_orders(store), expected);
+
+  put(store, 5, 5);
+  EXPECT_EQ(get(store, key), 101);
 }
 
 INSTANTIATE_TEST_SUITE_P(AtEachLruPosition, StorageCacheUpdateTest,

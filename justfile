@@ -26,5 +26,15 @@ test-asan:
     cmake --build build-asan --target storagecache_test
     ./build-asan/storagecache_test
 
+# Line/branch coverage of src/, measured by the test suite.
+coverage:
+    cmake -B build-coverage -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
+    cmake --build build-coverage --target storagecache_test
+    find build-coverage -name '*.gcda' -delete
+    ./build-coverage/storagecache_test
+    gcovr --root . --filter src/ --exclude-throw-branches \
+        --exclude-unreachable-branches --print-summary \
+        --html-details build-coverage/coverage.html build-coverage
+
 clean:
-    rm -rf build build-asan
+    rm -rf build build-asan build-coverage
