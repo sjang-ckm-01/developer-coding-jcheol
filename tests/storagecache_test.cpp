@@ -1,6 +1,5 @@
-#include "storagecache.h"
-
 #include <gtest/gtest.h>
+#include <storagecache/storagecache.h>
 
 using namespace storagecache;
 

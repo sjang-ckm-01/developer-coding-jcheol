@@ -1,19 +1,16 @@
-SOURCES := src tests bench
+SOURCES := storagecache tests bench
 
-.PHONY: build run test bench fmt fmt-check test-asan coverage clean
+.PHONY: build test bench fmt fmt-check test-asan coverage clean
 
 build:
 	cmake -B build -DCMAKE_BUILD_TYPE=Release
 	cmake --build build
 
-run: build
-	./build/storagecache
-
 test: build
-	./build/storagecache_test
+	ctest --test-dir build --output-on-failure
 
 bench: build
-	./build/storagecache_bench
+	./build/bench/storagecache_bench
 
 # Reformat every C++ source in place.
 fmt:
@@ -24,17 +21,17 @@ fmt-check:
 	find $(SOURCES) -type f \( -name '*.cpp' -o -name '*.h' \) -exec clang-format --dry-run --Werror {} +
 
 test-asan:
-	cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZERS=ON
+	cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DSTORAGECACHE_ENABLE_SANITIZERS=ON
 	cmake --build build-asan --target storagecache_test
-	./build-asan/storagecache_test
+	ctest --test-dir build-asan --output-on-failure
 
-# Line/branch coverage of src/, measured by the test suite.
+# Line/branch coverage of the library, measured by the test suite.
 coverage:
-	cmake -B build-coverage -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
+	cmake -B build-coverage -DCMAKE_BUILD_TYPE=Debug -DSTORAGECACHE_ENABLE_COVERAGE=ON
 	cmake --build build-coverage --target storagecache_test
 	find build-coverage -name '*.gcda' -delete
-	./build-coverage/storagecache_test
-	gcovr --root . --filter src/ --exclude-throw-branches \
+	ctest --test-dir build-coverage --output-on-failure
+	gcovr --root . --filter storagecache/ --exclude-throw-branches \
 		--exclude-unreachable-branches --print-summary \
 		--html-details build-coverage/coverage.html build-coverage
 
